@@ -220,4 +220,91 @@
   (var-get contract-paused)
 )
 
+;; Advanced Reputation Analytics and Risk Assessment System
+;; This comprehensive function analyzes user behavior patterns, calculates risk metrics,
+;; and provides detailed reputation insights for lending protocols and DeFi applications.
+;; It includes trending analysis, behavioral scoring, and predictive risk assessment.
+(define-public (calculate-comprehensive-risk-profile (user principal))
+  (begin
+    (asserts! (is-contract-active) ERR-CONTRACT-PAUSED)
+
+    (let (
+      (user-profile (unwrap! (map-get? user-reputation { user: user }) ERR-USER-NOT-FOUND))
+      (reputation-score (get reputation-score user-profile))
+      (total-transactions (get total-transactions user-profile))
+      (successful-loans (get successful-loans user-profile))
+      (liquidations (get liquidations user-profile))
+      (account-age (- block-height (get registration-block user-profile)))
+
+      ;; Calculate various risk metrics
+      (liquidation-ratio (if (> total-transactions u0)
+        (/ (* liquidations u100) total-transactions)
+        u0
+      ))
+      (success-ratio (if (> total-transactions u0)
+        (/ (* successful-loans u100) total-transactions)
+        u0
+      ))
+      (activity-frequency (if (> account-age u0)
+        (/ total-transactions account-age)
+        u0
+      ))
+
+      ;; Risk scoring algorithm
+      (base-risk-score (if (> reputation-score u750) u1   ;; Low risk
+        (if (> reputation-score u500) u2           ;; Medium risk
+          (if (> reputation-score u250) u3           ;; High risk
+            u4                                  ;; Very high risk
+          )
+        )
+      ))
+
+      ;; Behavioral risk adjustments
+      (liquidation-risk-adjustment (if (> liquidation-ratio u20) u2
+        (if (> liquidation-ratio u10) u1 u0)
+      ))
+      (activity-risk-adjustment (if (< activity-frequency u1) u1 u0))
+      (age-risk-adjustment (if (< account-age u144) u1 u0)) ;; Less than 1 day old
+
+      ;; Final risk score calculation
+      (total-risk-score (+ base-risk-score liquidation-risk-adjustment
+                            activity-risk-adjustment age-risk-adjustment))
+
+      ;; Credit worthiness calculation (inverted risk score with proper bounds checking)
+      (creditworthiness (- u10 (if (> total-risk-score u10) u10 total-risk-score)))
+
+      ;; Recommended lending limits based on risk profile
+      (max-loan-amount (if (is-eq total-risk-score u1) u1000000       ;; Low risk: 1M
+        (if (is-eq total-risk-score u2) u500000           ;; Medium-low: 500K
+          (if (is-eq total-risk-score u3) u100000           ;; Medium: 100K
+            (if (is-eq total-risk-score u4) u50000         ;; High: 50K
+              u10000                                    ;; Very high: 10K
+            )
+          )
+        )
+      ))
+    )
+
+      ;; Store risk profile for future reference
+      (map-set reputation-history
+        { user: user, period: block-height }
+        { score: reputation-score, timestamp: block-height }
+      )
+
+      (ok {
+        user: user,
+        reputation-score: reputation-score,
+        risk-level: total-risk-score,
+        creditworthiness: creditworthiness,
+        liquidation-ratio: liquidation-ratio,
+        success-ratio: success-ratio,
+        account-age: account-age,
+        activity-frequency: activity-frequency,
+        max-recommended-loan: max-loan-amount,
+        total-transactions: total-transactions,
+        assessment-timestamp: block-height
+      })
+    )
+  )
+)
 
